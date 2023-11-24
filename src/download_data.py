@@ -1,3 +1,6 @@
+"""
+Functions to download admissions data from the NHS England website.
+"""
 from typing import Any, Callable, Literal
 
 import pandas as pd
