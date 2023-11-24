@@ -1,15 +1,10 @@
-from jax import random
 import jax.numpy as jnp
-
 import numpyro
 import numpyro.distributions as dist
-from numpyro.infer import MCMC, NUTS
-from numpyro.diagnostics import hpdi
-
-import matplotlib.pyplot as plt
-plt.style.use("bmh")
-
 import plotly.express as px
+from jax import random
+from numpyro.diagnostics import hpdi
+from numpyro.infer import MCMC, NUTS
 
 from .download_data import get_admissions_data
 
@@ -28,9 +23,7 @@ def admissions_model(timestamp, admissions=None):
     admissions_loc = intercept + gradient * timestamp
     admissions_scale = numpyro.sample("noise", dist.Exponential(noise_rate))
     return numpyro.sample(
-        "admissions", 
-        dist.Normal(admissions_loc, admissions_scale), 
-        obs=admissions
+        "admissions", dist.Normal(admissions_loc, admissions_scale), obs=admissions
     )
 
 
@@ -48,17 +41,14 @@ if __name__ == "__main__":
 
     # Compute empirical posterior distribution over mu
     samples_1 = mcmc.get_samples()
-    posterior_mu = (
-        jnp.expand_dims(samples_1["gradient"], -1) * timestamps + jnp.expand_dims(samples_1["intercept"], -1) 
-    )
+    posterior_mu = jnp.expand_dims(
+        samples_1["gradient"], -1
+    ) * timestamps + jnp.expand_dims(samples_1["intercept"], -1)
 
     mean_mu = jnp.mean(posterior_mu, axis=0)
     hpdi_mu = hpdi(posterior_mu, 0.9)
     fig = px.line(x=timestamps, y=mean_mu)
     scatter = px.scatter(x=timestamps, y=admissions)
-    fig.add_traces(
-        list(scatter.select_traces())
-    )
+    fig.add_traces(list(scatter.select_traces()))
     fig.update_yaxes(range=[0, 1e6])
     fig.show()
-    
