@@ -2,7 +2,7 @@
     "editor.formatOnSave": true,
     "autoDocstring.docstringFormat": "google",
     "editor.codeActionsOnSave": {
-        "source.organizeImports": true
+        "source.organizeImports": "explicit"
     },
     "python.terminal.activateEnvInCurrentTerminal": true,
     "python.defaultInterpreterPath": ".venv/bin/python"
