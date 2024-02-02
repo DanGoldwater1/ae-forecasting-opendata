@@ -1,5 +1,9 @@
 """
 Functions to build predictive model of admissions.
+
+TODO:
+- Fix estimation of uncertainty (95% CI is too narrow!)
+- Show how to build hierarchy (need to load data for different locations)
 """
 
 from typing import Optional
@@ -41,13 +45,13 @@ def admissions_model(timestamp: Array, admissions: Optional[Array] = None) -> No
 
 
 def plot_model_results(
-    x: Array, y_observed: Array, y_predicted: Array, y_hdpi: Array
+    x: Array, y_observed: Array, y_predicted: Array, y_hpdi: Array
 ) -> None:
     fig = px.line(x=x, y=y_predicted)
     extra_traces = [
         go.Scatter(
             x=x,
-            y=y_hdpi[0],
+            y=y_hpdi[0],
             fill=None,
             mode="lines",
             line_color="lightblue",
@@ -55,7 +59,7 @@ def plot_model_results(
         ),
         go.Scatter(
             x=x,
-            y=y_hdpi[1],
+            y=y_hpdi[1],
             fill="tonexty",
             mode="lines",
             line_color="lightblue",
@@ -94,11 +98,11 @@ if __name__ == "__main__":
         samples_1["gradient"], -1
     ) * timestamps + jnp.expand_dims(samples_1["intercept"], -1)
     admissions_pred = jnp.mean(posterior_mu, axis=0)
-    admissions_hdpi = hpdi(posterior_mu, 0.9)
+    admissions_hpdi = hpdi(posterior_mu, 0.95)
 
     plot_model_results(
         x=timestamps,
         y_observed=admissions,
         y_predicted=admissions_pred,
-        y_hdpi=admissions_hdpi,
+        y_hpdi=admissions_hpdi,
     )
