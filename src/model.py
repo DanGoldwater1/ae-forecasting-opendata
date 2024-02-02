@@ -19,6 +19,8 @@ from numpyro.infer import MCMC, NUTS
 
 from .download_data import get_admissions_data
 
+PROP_TRAIN = 0.75
+
 
 def admissions_model(timestamp: Array, admissions: Optional[Array] = None) -> None:
     """Builds admissions model using numpyro api
@@ -85,24 +87,31 @@ if __name__ == "__main__":
     timestamps = jnp.arange(len(df_admissions.index))
     admissions = jnp.array(df_admissions["Total Emergency Admissions"].values)
 
+    # Train/test split
+    n_train = int(PROP_TRAIN * timestamps.size)
+    timestamps_train = timestamps[:n_train]
+    timestamps_test = timestamps[n_train:]
+    admissions_train = admissions[:n_train]
+    admissions_test = admissions[n_train:]
+
     # Fit the model
     nuts_kernel = NUTS(admissions_model)
     mcmc = MCMC(nuts_kernel, num_warmup=500, num_samples=1000)
     rng_key = random.PRNGKey(0)
-    mcmc.run(rng_key, timestamps, admissions=admissions, extra_fields=())
+    mcmc.run(rng_key, timestamps_train, admissions=admissions_train, extra_fields=())
     mcmc.print_summary()
 
     # Compute empirical posterior distribution over mu
     samples_1 = mcmc.get_samples()
     posterior_mu = jnp.expand_dims(
         samples_1["gradient"], -1
-    ) * timestamps + jnp.expand_dims(samples_1["intercept"], -1)
+    ) * timestamps_test + jnp.expand_dims(samples_1["intercept"], -1)
     admissions_pred = jnp.mean(posterior_mu, axis=0)
     admissions_hpdi = hpdi(posterior_mu, 0.95)
 
     plot_model_results(
-        x=timestamps,
-        y_observed=admissions,
+        x=timestamps_test,
+        y_observed=admissions_test,
         y_predicted=admissions_pred,
         y_hpdi=admissions_hpdi,
     )
