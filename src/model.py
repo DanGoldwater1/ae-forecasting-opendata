@@ -1,6 +1,7 @@
 """
 Functions to build predictive model of admissions.
 """
+
 from typing import Optional
 
 import jax.numpy as jnp
@@ -27,7 +28,7 @@ def admissions_model(timestamp: Array, admissions: Optional[Array] = None) -> No
     intercept_scale = 1e4
     gradient_loc = 1e3
     gradient_scale = 1e2
-    noise_rate = 1.0
+    noise_rate = 10.0
 
     # Priors
     intercept = numpyro.sample("intercept", dist.Normal(intercept_loc, intercept_scale))
@@ -80,6 +81,7 @@ if __name__ == "__main__":
     timestamps = jnp.arange(len(df_admissions.index))
     admissions = jnp.array(df_admissions["Total Emergency Admissions"].values)
 
+    # Fit the model
     nuts_kernel = NUTS(admissions_model)
     mcmc = MCMC(nuts_kernel, num_warmup=500, num_samples=1000)
     rng_key = random.PRNGKey(0)
