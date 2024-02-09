@@ -17,27 +17,30 @@ def get_admissions_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: A&E admissions data downloaded from the NHSE website.
     """
-    activity_source = get_data_source("ae_activity")
-    df_activity = read_data_source(activity_source).pipe(_prep_raw_activity_data)
+    activity_source = get_data_source("ae_monthly_jan24")
+    df_raw = read_data_source(activity_source)
 
-    df_admissions = df_activity["Emergency Admissions"]
-
-    return df_admissions
-
-
-def _prep_raw_activity_data(df_raw: pd.DataFrame) -> pd.DataFrame:
-    cols_to_drop = [
-        col_name
-        for col_name in df_raw.columns.get_level_values(0)
-        if "Unnamed" in col_name
-    ]
-    df_pre = df_raw.drop(cols_to_drop, axis=1, level=0)
-    return df_pre
+    return df_raw
 
 
 if __name__ == "__main__":
     df_admissions = get_admissions_data()
     print(df_admissions.head())
 
-    fig = px.line(df_admissions, y="Total Emergency Admissions")
+    # Plot type 1 admissions for January 2024
+    time_col = "Period"
+    location_col = "Org Code"
+    metric_col = "Emergency admissions via A&E - Type 1"
+    row_filter = (df_admissions[location_col] != "TOTAL") & (
+        df_admissions[time_col] == "MSitAE-JANUARY-2024"
+    )
+
+    df_plot = df_admissions.loc[row_filter].sort_values(
+        by=[metric_col], ignore_index=True, ascending=False
+    )
+    fig = px.bar(
+        df_plot,
+        x=location_col,
+        y=metric_col,
+    )
     fig.show()

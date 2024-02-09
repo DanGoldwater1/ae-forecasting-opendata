@@ -22,7 +22,7 @@ def read_data_source(source: DataSource) -> pd.DataFrame:
     return reader(source)
 
 
-def _register_data_reader(
+def register_data_reader(
     file_format: FileFormat,
 ) -> Callable[[DataReaderType], DataReaderType]:
     def _decorator(reader: DataReaderType):
@@ -32,6 +32,11 @@ def _register_data_reader(
     return _decorator
 
 
-@_register_data_reader("excel")
+@register_data_reader("excel")
 def _excel_reader(source: DataSource) -> pd.DataFrame:
     return pd.read_excel(source.origin, **source.reader_params)
+
+
+@register_data_reader("csv")
+def _csv_reader(source: DataSource) -> pd.DataFrame:
+    return pd.read_csv(source.origin, **source.reader_params)
