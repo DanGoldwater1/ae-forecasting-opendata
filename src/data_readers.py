@@ -19,6 +19,8 @@ def read_data_source(source: DataSource) -> pd.DataFrame:
     if not reader:
         raise NotImplementedError(f"File format '{source.file_format}' not supported")
 
+    # TODO: exception handling
+
     return reader(source)
 
 

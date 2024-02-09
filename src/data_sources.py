@@ -7,28 +7,24 @@ from dataclasses import dataclass, field
 
 
 FileFormat = Literal["excel"]
-
 NHSE_BASE_URL = "https://www.england.nhs.uk/statistics/wp-content/uploads/sites/2"
-_DATA_SOURCES = {
-    # Available from: https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/
-    # "ae_activity": {
-    #     "origin": f"{NHSE_BASE_URL}/2023/11/Monthly-AE-Time-Series-October-2023.xls",
-    #     "origin_type": "url",
-    #     "file_format": "excel",
-    #     "reader_params": {
-    #         "sheet_name": "Activity",
-    #         "skiprows": 12,
-    #         "index_col": 1,
-    #         "header": [0, 1],
-    #     },
-    # },
-    "ae_monthly_jan24": {
-        "origin": f"{NHSE_BASE_URL}/2024/02/Monthly-AE-January-2024.csv",
+
+
+# Available from: https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/
+_AE_MONTHLY_FILES = [
+    ("012024", "2024/02/Monthly-AE-January-2024.csv"),
+    ("122023", "2024/03/Monthly-AE-December-2023.csv"),
+]
+_AE_MONTHLY_DATA_SOURCES = {
+    f"ae_monthly_{month_year}": {
+        "origin": f"{NHSE_BASE_URL}/{filename}",
         "origin_type": "url",
         "file_format": "csv",
         "reader_params": {},
-    },
+    }
+    for month_year, filename in _AE_MONTHLY_FILES
 }
+_DATA_SOURCES = {**_AE_MONTHLY_DATA_SOURCES}
 
 
 @dataclass

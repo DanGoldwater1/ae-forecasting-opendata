@@ -17,7 +17,7 @@ def get_admissions_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: A&E admissions data downloaded from the NHSE website.
     """
-    activity_source = get_data_source("ae_monthly_jan24")
+    activity_source = get_data_source("ae_monthly_012024")
     df_raw = read_data_source(activity_source)
 
     return df_raw
