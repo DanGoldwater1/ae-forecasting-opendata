@@ -5,7 +5,7 @@ Functions to download admissions data from the NHS England website.
 import pandas as pd
 import plotly.express as px
 
-from .data_sources import get_data_source
+from .data_sources import get_data_source_by_name
 from .data_readers import read_data_source
 
 
@@ -17,7 +17,7 @@ def get_admissions_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: A&E admissions data downloaded from the NHSE website.
     """
-    activity_source = get_data_source("ae_monthly_012024")
+    activity_source = get_data_source_by_name("ae_monthly_012024")
     df_raw = read_data_source(activity_source)
 
     return df_raw
