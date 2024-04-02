@@ -6,12 +6,11 @@ TODO:
 - Show how to build hierarchy (need to load data for different locations)
 """
 
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 
 import numpyro
 import numpyro.distributions as dist
-from numpyro.diagnostics import hpdi
-from numpyro.infer import MCMC, NUTS
+from numpyro.infer import MCMC, NUTS, Predictive
 
 import jax.numpy as jnp
 from jax import Array, random
@@ -49,35 +48,68 @@ def admissions_model(timestamps: Array, admissions: Optional[Array] = None) -> N
 
 
 def plot_model_results(
-    x: Array, y_observed: Array, y_predicted: Array, y_hpdi: Array
+    x: Array,
+    y_obs: Array,
+    y_pred: Array,
+    y_lower: Array,
+    y_upper: Array,
+    pred_length: int,
 ) -> None:
-    fig = px.line(x=x, y=y_predicted)
-    extra_traces = [
-        go.Scatter(
-            x=x,
-            y=y_hpdi[0],
-            fill=None,
-            mode="lines",
-            line_color="lightblue",
-            name="Lower CI",
-        ),
-        go.Scatter(
-            x=x,
-            y=y_hpdi[1],
-            fill="tonexty",
-            mode="lines",
-            line_color="lightblue",
-            name="Upper CI",
-        ),
-        list(px.scatter(x=x, y=y_observed).select_traces()),
+    fig = px.scatter(
+        x=x,
+        y=y_obs,
+        color_discrete_sequence=["darkblue"],
+    )
+
+    samples = [
+        {
+            "name": "Insample",
+            "slice": slice(0, -pred_length),
+            "colours": {"light": "lightblue", "dark": "darkblue"},
+        },
+        {
+            "name": "Outsample",
+            "slice": slice(-pred_length, None),
+            "colours": {"light": "palevioletred", "dark": "mediumvioletred"},
+        },
     ]
 
-    for traces in extra_traces:
-        fig.add_traces(traces)
+    for sample in samples:
+        name = sample["name"]
+        slice_ = sample["slice"]
+        extra_traces = [
+            go.Scatter(
+                x=x[slice_],
+                y=y_pred[slice_],
+                fill=None,
+                mode="lines",
+                line_color=sample["colours"]["dark"],
+                name=f"Mean ({name})",
+            ),
+            go.Scatter(
+                x=x[slice_],
+                y=y_lower[slice_],
+                fill=None,
+                mode="lines",
+                line_color=sample["colours"]["light"],
+                name=f"Lower CI ({name})",
+            ),
+            go.Scatter(
+                x=x[slice_],
+                y=y_upper[slice_],
+                fill="tonexty",
+                mode="lines",
+                line_color=sample["colours"]["light"],
+                name=f"Upper CI ({name})",
+            ),
+        ]
 
-    y_offset = 0.1  # 10% above/below
-    y_min = min(y_observed) - y_offset * abs(max(y_observed))
-    y_max = (1 + y_offset) * max(y_observed)
+        for traces in extra_traces:
+            fig.add_traces(traces)
+
+    y_axis_offset = 0.1  # Axis 10% above/below
+    y_min = min(y_obs) - y_axis_offset * abs(max(y_obs))
+    y_max = (1 + y_axis_offset) * max(y_obs)
     fig.update_yaxes(range=[y_min, y_max])
 
     fig.show()
@@ -85,9 +117,14 @@ def plot_model_results(
 
 class TimeSeriesModeller:
     def __init__(
-        self, model_func: Callable[[Array, Array], Array], predictor_name: str
+        self,
+        model: Callable[[Array, Array], Array],
+        predictor_name: str,
+        hyperparams: Optional[dict[str, Any]] = None,
     ):
-        nuts_kernel = NUTS(model_func)
+        self.model = model
+        self.hyperparams = hyperparams or {}
+        nuts_kernel = NUTS(model)
         self.predictor_name = predictor_name
         self._mcmc = MCMC(nuts_kernel, num_warmup=500, num_samples=1000)
         self._fitted = False
@@ -115,6 +152,7 @@ class TimeSeriesModeller:
             "timestamps": timestamps_train,
             "extra_fields": (),
             self.predictor_name: predictors_train,  # Named
+            **self.hyperparams,
         }
         self._mcmc.run(**mcmc_params)
         self._fitted = True
@@ -124,34 +162,53 @@ class TimeSeriesModeller:
             raise AttributeError(
                 "TimeSeriesModel hasn't been fitted! Call `.fit()` before `.predict()`"
             )
-        samples = self._mcmc.get_samples()
-        mx_posterior = jnp.expand_dims(samples["gradient"], -1) * timestamps_test
-        c_posterior = jnp.expand_dims(samples["intercept"], -1)
-        predictors_posterior = mx_posterior + c_posterior
-        return predictors_posterior
+        posterior_samples = self._mcmc.get_samples()
+        rng_key = random.PRNGKey(1)
+        posterior_predictive = Predictive(self.model, posterior_samples)
+        predictions = posterior_predictive(
+            rng_key, timestamps=timestamps_test, **self.hyperparams
+        )
+        return predictions
+
+    def print_summary(self):
+        self._mcmc.print_summary()
 
 
 if __name__ == "__main__":
     df_admissions = get_admissions_data().loc[lambda df: df["org_code"] == "R0A"]
 
+    # Train/test split
+    df_admissions.sort_values(by=["org_code", "source_date"], inplace=True)
     timestamps = jnp.arange(len(df_admissions.index))
     admissions = jnp.array(df_admissions["ae_admissions_total"].values)
     timestamps_train, timestamps_test, admissions_train, admissions_test = (
         TimeSeriesModeller.train_test_split(timestamps, admissions)
     )
 
-    model = TimeSeriesModeller(admissions_model, predictor_name="admissions")
-    model.fit(timestamps_train, admissions_train)
-    # mcmc.print_summary()
-    admissions_posterior = model.predict(timestamps_test)
+    # Fitting
+    modeller = TimeSeriesModeller(admissions_model, predictor_name="admissions")
+    modeller.fit(timestamps_train, admissions_train)
+    modeller.print_summary()
 
-    # Compute empirical posterior distribution over mu
-    admissions_pred = jnp.mean(admissions_posterior, axis=0)
-    admissions_hpdi = hpdi(admissions_posterior, 0.95)
+    # Predictions
+    admissions_pred = modeller.predict(timestamps)["admissions"]
+    quantiles = [0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975]
+    admissions_pred_quantiles = jnp.quantile(
+        admissions_pred, jnp.array(quantiles), axis=0
+    )
+
+    df_admissions = df_admissions.assign(
+        **{
+            f"ae_admissions_predicted_{q}": x
+            for q, x in zip(quantiles, admissions_pred_quantiles)
+        }
+    )
 
     plot_model_results(
-        x=timestamps_test,
-        y_observed=admissions_test,
-        y_predicted=admissions_pred,
-        y_hpdi=admissions_hpdi,
+        x=df_admissions["source_date"].values,
+        y_obs=df_admissions["ae_admissions_total"],
+        y_pred=df_admissions["ae_admissions_predicted_0.5"],
+        y_lower=df_admissions["ae_admissions_predicted_0.025"],
+        y_upper=df_admissions["ae_admissions_predicted_0.975"],
+        pred_length=timestamps_test.size,
     )
