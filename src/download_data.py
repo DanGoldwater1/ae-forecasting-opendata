@@ -11,6 +11,7 @@ import plotly.express as px
 
 from .data_sources import DataSource, get_ae_monthly_data_sources
 from .data_readers import read_data_source
+from .preprocessing import prepare_admissions_data
 
 UTC_TZ = timezone("UTC")
 
@@ -39,24 +40,23 @@ def get_admissions_data() -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    df_admissions = get_admissions_data()
-    print(df_admissions.columns)
-    print(df_admissions.head())
+    df_admissions = get_admissions_data().pipe(prepare_admissions_data)
 
-    # TODO: rename columns
-    # TODO: parse period into date
+    # Plot type 1 admissions for January 2021
+    plot_dt = date(2021, 1, 1)
+    time_col = "source_date"
+    location_col = "org_code"
+    metric_col = "ae_admissions_total"
 
-    # Plot type 1 admissions for January 2024
-    time_col = "Period"
-    location_col = "Org Code"
-    metric_col = "Emergency admissions via A&E - Type 1"
-    row_filter = (df_admissions[location_col] != "TOTAL") & (
-        df_admissions[time_col] == "MSitAE-JANUARY-2023"
-    )
+    # Build mask
+    location_mask = df_admissions[location_col] != "TOTAL"
+    time_mask = df_admissions[time_col] == plot_dt
+    row_mask = location_mask * time_mask
 
-    df_plot = df_admissions.loc[row_filter].sort_values(
+    df_plot = df_admissions.loc[row_mask].sort_values(
         by=[metric_col], ignore_index=True, ascending=False
     )
+
     fig = px.bar(
         df_plot,
         x=location_col,
