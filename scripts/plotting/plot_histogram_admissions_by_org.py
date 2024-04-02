@@ -1,12 +1,16 @@
+"""
+Plot a histogram of total admissions, segmented by org code.
+"""
+
 from datetime import date
 
 import plotly.express as px
 
-from src.preprocessing import prepare_admissions_data
-from src.download_data import download_admissions_data
+from src.helpers import get_admissions_data
+
 
 if __name__ == "__main__":
-    df_admissions = download_admissions_data().pipe(prepare_admissions_data)
+    df_admissions = get_admissions_data()
 
     # Plot type 1 admissions for January 2021
     plot_dt = date(2021, 1, 1)

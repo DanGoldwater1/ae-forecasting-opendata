@@ -1,7 +1,21 @@
+"""
+Functions to preprocess A&E data.
+"""
+
 import pandas as pd
 
 
 def prepare_admissions_data(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepare admissions data by renaming columns, adding derived fields and
+    selecting a subset of columns.
+
+    Args:
+        df_raw (pd.DataFrame): Raw data downloaded from source.
+
+    Returns:
+        pd.DataFrame: Prepared data.
+    """
     col_name_map = {
         "Org Code": "org_code",
         "Org name": "org_name",
