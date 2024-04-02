@@ -17,7 +17,7 @@ from jax import Array, random
 from numpyro.diagnostics import hpdi
 from numpyro.infer import MCMC, NUTS
 
-from .download_data import get_admissions_data
+from .download_data import download_admissions_data
 
 PROP_TRAIN = 0.75
 
@@ -82,7 +82,7 @@ def plot_model_results(
 
 
 if __name__ == "__main__":
-    df_admissions = get_admissions_data()
+    df_admissions = download_admissions_data()
 
     timestamps = jnp.arange(len(df_admissions.index))
     admissions = jnp.array(df_admissions["Total Emergency Admissions"].values)
