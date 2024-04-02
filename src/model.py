@@ -6,23 +6,25 @@ TODO:
 - Show how to build hierarchy (need to load data for different locations)
 """
 
-from typing import Optional
+from typing import Optional, Callable
 
-import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
-import plotly.express as px
-import plotly.graph_objects as go
-from jax import Array, random
 from numpyro.diagnostics import hpdi
 from numpyro.infer import MCMC, NUTS
 
-from .download_data import download_admissions_data
+import jax.numpy as jnp
+from jax import Array, random
+
+import plotly.express as px
+import plotly.graph_objects as go
+
+from .helpers import get_admissions_data
 
 PROP_TRAIN = 0.75
 
 
-def admissions_model(timestamp: Array, admissions: Optional[Array] = None) -> None:
+def admissions_model(timestamps: Array, admissions: Optional[Array] = None) -> None:
     """Builds admissions model using numpyro api
 
     Args:
@@ -39,7 +41,7 @@ def admissions_model(timestamp: Array, admissions: Optional[Array] = None) -> No
     # Priors
     intercept = numpyro.sample("intercept", dist.Normal(intercept_loc, intercept_scale))
     gradient = numpyro.sample("gradient", dist.Normal(gradient_loc, gradient_scale))
-    admissions_loc = intercept + gradient * timestamp
+    admissions_loc = intercept + gradient * timestamps
     admissions_scale = numpyro.sample("noise", dist.Exponential(noise_rate))
     numpyro.sample(
         "admissions", dist.Normal(admissions_loc, admissions_scale), obs=admissions
@@ -81,33 +83,71 @@ def plot_model_results(
     fig.show()
 
 
+class TimeSeriesModeller:
+    def __init__(
+        self, model_func: Callable[[Array, Array], Array], predictor_name: str
+    ):
+        nuts_kernel = NUTS(model_func)
+        self.predictor_name = predictor_name
+        self._mcmc = MCMC(nuts_kernel, num_warmup=500, num_samples=1000)
+        self._fitted = False
+
+    @staticmethod
+    def train_test_split(
+        timestamps: Array, predictors: Array
+    ) -> tuple[Array, Array, Array, Array]:
+        n_train = int(PROP_TRAIN * timestamps.size)
+        return (
+            timestamps[:n_train],
+            timestamps[n_train:],
+            predictors[:n_train],
+            predictors[n_train:],
+        )
+
+    def fit(
+        self,
+        timestamps_train: Array,
+        predictors_train: Array,
+    ) -> MCMC:
+        rng_key = random.PRNGKey(0)
+        mcmc_params = {
+            "rng_key": rng_key,
+            "timestamps": timestamps_train,
+            "extra_fields": (),
+            self.predictor_name: predictors_train,  # Named
+        }
+        self._mcmc.run(**mcmc_params)
+        self._fitted = True
+
+    def predict(self, timestamps_test: Array) -> Array:
+        if not self._fitted:
+            raise AttributeError(
+                "TimeSeriesModel hasn't been fitted! Call `.fit()` before `.predict()`"
+            )
+        samples = self._mcmc.get_samples()
+        mx_posterior = jnp.expand_dims(samples["gradient"], -1) * timestamps_test
+        c_posterior = jnp.expand_dims(samples["intercept"], -1)
+        predictors_posterior = mx_posterior + c_posterior
+        return predictors_posterior
+
+
 if __name__ == "__main__":
-    df_admissions = download_admissions_data()
+    df_admissions = get_admissions_data().loc[lambda df: df["org_code"] == "R0A"]
 
     timestamps = jnp.arange(len(df_admissions.index))
-    admissions = jnp.array(df_admissions["Total Emergency Admissions"].values)
+    admissions = jnp.array(df_admissions["ae_admissions_total"].values)
+    timestamps_train, timestamps_test, admissions_train, admissions_test = (
+        TimeSeriesModeller.train_test_split(timestamps, admissions)
+    )
 
-    # Train/test split
-    n_train = int(PROP_TRAIN * timestamps.size)
-    timestamps_train = timestamps[:n_train]
-    timestamps_test = timestamps[n_train:]
-    admissions_train = admissions[:n_train]
-    admissions_test = admissions[n_train:]
-
-    # Fit the model
-    nuts_kernel = NUTS(admissions_model)
-    mcmc = MCMC(nuts_kernel, num_warmup=500, num_samples=1000)
-    rng_key = random.PRNGKey(0)
-    mcmc.run(rng_key, timestamps_train, admissions=admissions_train, extra_fields=())
-    mcmc.print_summary()
+    model = TimeSeriesModeller(admissions_model, predictor_name="admissions")
+    model.fit(timestamps_train, admissions_train)
+    # mcmc.print_summary()
+    admissions_posterior = model.predict(timestamps_test)
 
     # Compute empirical posterior distribution over mu
-    samples_1 = mcmc.get_samples()
-    posterior_mu = jnp.expand_dims(
-        samples_1["gradient"], -1
-    ) * timestamps_test + jnp.expand_dims(samples_1["intercept"], -1)
-    admissions_pred = jnp.mean(posterior_mu, axis=0)
-    admissions_hpdi = hpdi(posterior_mu, 0.95)
+    admissions_pred = jnp.mean(admissions_posterior, axis=0)
+    admissions_hpdi = hpdi(admissions_posterior, 0.95)
 
     plot_model_results(
         x=timestamps_test,
