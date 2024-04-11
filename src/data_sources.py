@@ -2,14 +2,16 @@
 Defines data sources and functions for getting them.
 """
 
+from tenacity import retry
 from typing import Any, Literal
 from dataclasses import dataclass, field
 from string import Template
 from functools import cache
 from datetime import datetime, date
+import tenacity
 
-from .utils.web_scraping import find_all_tags
-from .utils.string_parsers import extract_month_name, extract_year
+from utils.web_scraping import find_all_tags
+from utils.string_parsers import extract_month_name, extract_year
 
 
 FileFormat = Literal["csv", "excel"]
@@ -58,6 +60,10 @@ def _get_data_sources() -> dict[SourceGroup, dict[date, DataSource]]:
     return {"ae_monthly": _AE_MONTHLY_DATA_SOURCES}
 
 
+@retry(
+        stop=tenacity.stop_after_attempt(4), 
+        wait=tenacity.wait_exponential(),
+        )
 def _get_admissions_csv_links(start_yy: str | int) -> list[str]:
     end_yy = f"{int(start_yy) + 1}"
     subpage_ext = ADMISSIONS_SUBPAGE_TEMPLATE.substitute(

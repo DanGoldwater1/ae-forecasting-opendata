@@ -6,7 +6,7 @@ from typing import Callable
 
 import pandas as pd
 
-from .data_sources import DataSource, FileFormat
+from data_sources import DataSource, FileFormat
 
 
 DataReaderType = Callable[[DataSource], pd.DataFrame]

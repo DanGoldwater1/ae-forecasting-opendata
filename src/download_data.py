@@ -8,8 +8,8 @@ from itertools import starmap
 
 import pandas as pd
 
-from .data_sources import DataSource, get_ae_monthly_data_sources
-from .data_readers import read_data_source
+from data_sources import DataSource, get_ae_monthly_data_sources
+from data_readers import read_data_source
 
 UTC_TZ = timezone("UTC")
 

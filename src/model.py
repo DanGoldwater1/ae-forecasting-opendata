@@ -9,6 +9,7 @@ TODO:
 from typing import Optional, Callable, Any
 
 import numpyro
+import pretty_errors
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, Predictive
 
@@ -18,7 +19,7 @@ from jax import Array, random
 import plotly.express as px
 import plotly.graph_objects as go
 
-from .helpers import get_admissions_data
+from helpers import get_admissions_data
 
 PROP_TRAIN = 0.75
 
