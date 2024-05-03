@@ -31,7 +31,7 @@ def admissions_model(timestamps: Array, admissions: Optional[Array] = None) -> N
         timestamp (Array): Timestamp data (must be numeric type)
         admissions (Optional[Array], optional): Observed admissions data. Defaults to None.
     """
-    # Hyper-parameters
+    # Hyper-parameters #DG: I think technically hyperpriors
     intercept_loc = 1e5
     intercept_scale = 1e4
     gradient_loc = 1e3
@@ -40,12 +40,28 @@ def admissions_model(timestamps: Array, admissions: Optional[Array] = None) -> N
 
     # Priors
     intercept = numpyro.sample("intercept", dist.Normal(intercept_loc, intercept_scale))
+    # notice that we are passing a string to numpro. When we give numpyro an instruction like this, it creates a variable called 'intercept', which has a state, and updates it. Here we are saying that this variable is a Gaussian with width `intercept_scale` and mean `intercept_loc`. 
     gradient = numpyro.sample("gradient", dist.Normal(gradient_loc, gradient_scale))
     admissions_loc = intercept + gradient * timestamps
     admissions_scale = numpyro.sample("noise", dist.Exponential(noise_rate))
     numpyro.sample(
         "admissions", dist.Normal(admissions_loc, admissions_scale), obs=admissions
     )
+    #In the line above, what happens depends on whether we have passed in `admissions` or not. If admissions == None, then numpyro take `admissions` to be sampled from the Gaussian stated, with mean at admissions_loc and width of admissions_scale. 
+    #If admissions != None, then numpyro will instead use these observations to help estimate the likelihood of the the data, given the parameters which we've provided (as priors) for the 'admissions' distribution. 
+    # Note that none of these samples are actually drawn at this point. This is just setting up for the MCMC to run later. When it does, these variables will each get drawn *once* per sample. So for a given sample, you will have a single value for gradient, a single value for intercept, and then N values for timestamp so N values for admissions_loc. 
+    # So if we run this with no admissions input, we will get N values for 'admissions' per sample - one per value of 'admissions_loc'. Note that in a given sample, these will all have the same value of 'admissions_scale'. 
+    # If we run it with admissions data, it changes context for that line, and switches to calculating the likelihood of the model given the input data. 
+    # So, for a given sample:
+    # For a given admissions observation admissions[i]:
+    # We calculate the likelihood of that observation: likelihood = Normal(admissions[i] | admissions_loc[i], admissions_scale)
+    # The overall likelihood for this sample is then the product of the likelihood for the individual points of each of these observations / data points. 
+
+    
+    
+
+
+
 
 
 def plot_model_results(
@@ -180,8 +196,8 @@ if __name__ == "__main__":
 
     # Train/test split
     df_admissions.sort_values(by=["org_code", "source_date"], inplace=True)
-    timestamps = jnp.arange(len(df_admissions.index))
-    admissions = jnp.array(df_admissions["ae_admissions_total"].values)
+    timestamps = jnp.arange(len(df_admissions.index)) #Create linspaced timestamps
+    admissions = jnp.array(df_admissions["ae_admissions_total"].values) #convert these to jnp array
     timestamps_train, timestamps_test, admissions_train, admissions_test = (
         TimeSeriesModeller.train_test_split(timestamps, admissions)
     )
